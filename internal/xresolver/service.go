@@ -2,14 +2,37 @@
 package xresolver
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"math/rand"
-	"os/exec"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/chromedp"
+)
+
+const (
+	defaultVirtualTimeBudgetMilliseconds = 15000
+
+	chromeHeadlessFlagKey              = "headless"
+	chromeDisableGPUFlagKey            = "disable-gpu"
+	chromeUseGLFlagKey                 = "use-gl"
+	chromeUseGLSwiftShaderValue        = "swiftshader"
+	chromeEnableUnsafeSwiftShaderFlag  = "enable-unsafe-swiftshader"
+	chromeHideScrollbarsFlagKey        = "hide-scrollbars"
+	chromeNoFirstRunFlagKey            = "no-first-run"
+	chromeNoDefaultBrowserCheckFlagKey = "no-default-browser-check"
+	chromeLogLevelFlagKey              = "log-level"
+	chromeSilentFlagKey                = "silent"
+	chromeDisableLoggingFlagKey        = "disable-logging"
+	chromeVirtualTimeBudgetFlagKey     = "virtual-time-budget"
+	chromeSilentLogLevelValue          = "3"
+
+	documentBodyCSSSelector       = "body"
+	documentHTMLNodeQuerySelector = "html"
 )
 
 // Config controls resolver behavior. Suitable for CLI & Web usage.
@@ -65,47 +88,49 @@ func NewChromeRenderer() *ChromeRenderer { return &ChromeRenderer{} }
 
 func (r *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBudgetMS int, chromePath string) (string, error) {
 	if vtBudgetMS <= 0 {
-		vtBudgetMS = 15000
+		vtBudgetMS = defaultVirtualTimeBudgetMilliseconds
 	}
-	args := []string{
-		"--headless=new",
-		"--disable-gpu",
-		"--use-gl=swiftshader",
-		"--enable-unsafe-swiftshader",
-		"--hide-scrollbars",
-		"--no-first-run",
-		"--no-default-browser-check",
-		"--log-level=3",
-		"--silent",
-		"--disable-logging",
-		"--user-agent=" + userAgent,
-		fmt.Sprintf("--virtual-time-budget=%d", vtBudgetMS),
-		"--dump-dom",
-		url,
-	}
-	cmd := exec.CommandContext(ctx, chromePath, args...)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = io.Discard
 
-	if err := cmd.Start(); err != nil {
+	allocatorOptions := []chromedp.ExecAllocatorOption{
+		chromedp.Flag(chromeHeadlessFlagKey, true),
+		chromedp.Flag(chromeDisableGPUFlagKey, true),
+		chromedp.Flag(chromeUseGLFlagKey, chromeUseGLSwiftShaderValue),
+		chromedp.Flag(chromeEnableUnsafeSwiftShaderFlag, true),
+		chromedp.Flag(chromeHideScrollbarsFlagKey, true),
+		chromedp.Flag(chromeNoFirstRunFlagKey, true),
+		chromedp.Flag(chromeNoDefaultBrowserCheckFlagKey, true),
+		chromedp.Flag(chromeLogLevelFlagKey, chromeSilentLogLevelValue),
+		chromedp.Flag(chromeSilentFlagKey, true),
+		chromedp.Flag(chromeDisableLoggingFlagKey, true),
+		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(vtBudgetMS)),
+	}
+	if chromePath != "" {
+		allocatorOptions = append(allocatorOptions, chromedp.ExecPath(chromePath))
+	}
+
+	allocatorCtx, cancelAllocator := chromedp.NewExecAllocator(ctx, allocatorOptions...)
+	defer cancelAllocator()
+
+	chromeCtx, cancelChrome := chromedp.NewContext(allocatorCtx)
+	defer cancelChrome()
+
+	var htmlContent string
+	renderTasks := chromedp.Tasks{
+		chromedp.ActionFunc(func(chromedpCtx context.Context) error {
+			return network.Enable().Do(chromedpCtx)
+		}),
+		chromedp.ActionFunc(func(chromedpCtx context.Context) error {
+			return emulation.SetUserAgentOverride(userAgent).Do(chromedpCtx)
+		}),
+		chromedp.Navigate(url),
+		chromedp.WaitReady(documentBodyCSSSelector, chromedp.ByQuery),
+		chromedp.OuterHTML(documentHTMLNodeQuerySelector, &htmlContent, chromedp.ByQuery),
+	}
+
+	if err := chromedp.Run(chromeCtx, renderTasks...); err != nil {
 		return "", err
 	}
-
-	waitCh := make(chan error, 1)
-	go func() { waitCh <- cmd.Wait() }()
-
-	select {
-	case <-ctx.Done():
-		_ = cmd.Process.Kill()
-		<-waitCh
-		return "", ctx.Err()
-	case err := <-waitCh:
-		if err != nil {
-			return "", err
-		}
-		return stdout.String(), nil
-	}
+	return htmlContent, nil
 }
 
 // Service resolves X/Twitter user IDs to handles (and display names).

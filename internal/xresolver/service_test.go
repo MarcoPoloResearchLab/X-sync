@@ -48,6 +48,10 @@ const (
 	profileHandleDisplayPrefix  = `@`
 	profileHandleTitleSeparator = " (@"
 	profileHandleTitleSuffix    = ") / X"
+
+	chromeMissingBinaryPath = "/nonexistent/chrome"
+	chromeRenderTestURL     = "https://example.com"
+	chromeRenderTestAgent   = "test-user-agent"
 )
 
 func htmlFor(handle, displayName string) string {
@@ -184,5 +188,19 @@ func TestBatchPacing_NoParallelLeak(t *testing.T) {
 	// Expect at least ~20ms (render) + ~30ms (delay) + second render ~20ms
 	if elapsed < 60*time.Millisecond {
 		t.Fatalf("pacing seems off, elapsed=%v", elapsed)
+	}
+}
+
+func TestChromeRendererMissingBinary(t *testing.T) {
+	renderer := NewChromeRenderer()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	htmlDocument, err := renderer.Render(ctx, chromeRenderTestAgent, chromeRenderTestURL, 100, chromeMissingBinaryPath)
+	if err == nil {
+		t.Fatalf("expected failure for missing chrome binary, got document=%q", htmlDocument)
+	}
+	if !strings.Contains(err.Error(), chromeMissingBinaryPath) {
+		t.Fatalf("expected error to reference chrome path %q, got %v", chromeMissingBinaryPath, err)
 	}
 }
