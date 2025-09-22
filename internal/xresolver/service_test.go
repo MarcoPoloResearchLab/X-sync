@@ -36,13 +36,44 @@ func (r *stubRenderer) Render(ctx context.Context, userAgent, url string, vtBudg
 	return "", errors.New("unknown url")
 }
 
-func htmlFor(handle, name string) string {
+const (
+	htmlDocumentMetaPrefix      = `<html><head><meta property="og:title" content="`
+	htmlDocumentHeadSuffix      = `"></head>`
+	htmlDocumentBodyOpenTag     = `<body>`
+	htmlDocumentBodyCloseTag    = `</body></html>`
+	htmlAnchorOpenPrefix        = `<a href="`
+	htmlAnchorTextSeparator     = `">`
+	htmlAnchorCloseSuffix       = `</a>`
+	profileHandleURLPrefix      = `https://x.com/`
+	profileHandleDisplayPrefix  = `@`
+	profileHandleTitleSeparator = " (@"
+	profileHandleTitleSuffix    = ") / X"
+)
+
+func htmlFor(handle, displayName string) string {
 	// minimal HTML that satisfies our extractors
-	title := name
+	profileTitle := displayName
 	if handle != "" {
-		title = name + " (@" + handle + ") / X"
+		profileTitle = displayName + profileHandleTitleSeparator + handle + profileHandleTitleSuffix
 	}
-	return `<html><head><meta property="og:title" content="` + title + `"></head><body></body></html>`
+
+	var htmlBuilder strings.Builder
+	htmlBuilder.WriteString(htmlDocumentMetaPrefix)
+	htmlBuilder.WriteString(profileTitle)
+	htmlBuilder.WriteString(htmlDocumentHeadSuffix)
+	htmlBuilder.WriteString(htmlDocumentBodyOpenTag)
+	if handle != "" {
+		htmlBuilder.WriteString(htmlAnchorOpenPrefix)
+		htmlBuilder.WriteString(profileHandleURLPrefix)
+		htmlBuilder.WriteString(handle)
+		htmlBuilder.WriteString(htmlAnchorTextSeparator)
+		htmlBuilder.WriteString(profileHandleDisplayPrefix)
+		htmlBuilder.WriteString(handle)
+		htmlBuilder.WriteString(htmlAnchorCloseSuffix)
+	}
+	htmlBuilder.WriteString(htmlDocumentBodyCloseTag)
+
+	return htmlBuilder.String()
 }
 
 func TestResolveSuccess_FirstEndpoint(t *testing.T) {
