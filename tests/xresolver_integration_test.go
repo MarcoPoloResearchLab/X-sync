@@ -32,9 +32,15 @@ const (
 	xresolverIntegrationEmptySourceURLFormat         = "expected non-empty source URL for account %s"
 	xresolverIntegrationFallbackErrorFormat          = "fallback chrome discovery failed (fallback error: %v, initial error: %v)"
 	xresolverIntegrationUnexpectedAccountIDFormat    = "expected account id %s, got %s"
-)
 
-const xresolverIntegrationContextTimeout = 2 * time.Minute
+	xresolverIntegrationContextTimeout      = 10 * time.Second
+	xresolverIntegrationPerIDTimeout        = 10 * time.Second
+	xresolverIntegrationAttemptTimeout      = 10 * time.Second
+	xresolverIntegrationVirtualTimeBudgetMS = 15000
+	xresolverIntegrationRetries             = 1
+	xresolverIntegrationRetryMin            = 400 * time.Millisecond
+	xresolverIntegrationRetryMax            = 1500 * time.Millisecond
+)
 
 var xresolverIntegrationRunFlag = flag.Bool(xresolverIntegrationFlagName, false, xresolverIntegrationFlagDescription)
 
@@ -55,7 +61,16 @@ func TestXResolverChromeIntegration(t *testing.T) {
 		t.Skipf(integrationSkipMessageFormat, xresolverIntegrationChromeUnavailableMessage, chromeErr)
 	}
 
-	integrationService := xresolver.NewService(xresolver.Config{ChromePath: chromeBinaryPath}, xresolver.NewChromeRenderer())
+	resolverConfig := xresolver.Config{
+		ChromePath:          chromeBinaryPath,
+		VirtualTimeBudgetMS: xresolverIntegrationVirtualTimeBudgetMS,
+		PerIDTimeout:        xresolverIntegrationPerIDTimeout,
+		AttemptTimeout:      xresolverIntegrationAttemptTimeout,
+		Retries:             xresolverIntegrationRetries,
+		RetryMin:            xresolverIntegrationRetryMin,
+		RetryMax:            xresolverIntegrationRetryMax,
+	}
+	resolverService := xresolver.NewService(resolverConfig, xresolver.NewChromeRenderer())
 
 	scenarios := []xresolverIntegrationScenario{
 		{
@@ -73,7 +88,7 @@ func TestXResolverChromeIntegration(t *testing.T) {
 			defer cancelTestContext()
 
 			request := xresolver.Request{IDs: []string{scenario.accountID}}
-			profiles := integrationService.ResolveBatch(testContext, request)
+			profiles := resolverService.ResolveBatch(testContext, request)
 			if len(profiles) != xresolverIntegrationExpectedProfileCount {
 				t.Fatalf(xresolverIntegrationUnexpectedProfileCountFormat, xresolverIntegrationExpectedProfileCount, len(profiles))
 			}
