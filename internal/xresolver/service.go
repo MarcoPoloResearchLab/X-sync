@@ -91,7 +91,7 @@ func (r *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBu
 		vtBudgetMS = defaultVirtualTimeBudgetMilliseconds
 	}
 
-	allocatorOptions := []chromedp.ExecAllocatorOption{
+	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:], []chromedp.ExecAllocatorOption{
 		chromedp.Flag(chromeHeadlessFlagKey, true),
 		chromedp.Flag(chromeDisableGPUFlagKey, true),
 		chromedp.Flag(chromeUseGLFlagKey, chromeUseGLSwiftShaderValue),
@@ -103,7 +103,7 @@ func (r *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBu
 		chromedp.Flag(chromeSilentFlagKey, true),
 		chromedp.Flag(chromeDisableLoggingFlagKey, true),
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(vtBudgetMS)),
-	}
+	}...)
 	if chromePath != "" {
 		allocatorOptions = append(allocatorOptions, chromedp.ExecPath(chromePath))
 	}
