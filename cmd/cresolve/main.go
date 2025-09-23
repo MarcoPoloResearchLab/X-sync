@@ -9,13 +9,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/f-sync/fsync/internal/utils/chromepath"
 	"github.com/f-sync/fsync/internal/xresolver"
 )
 
@@ -25,7 +24,7 @@ func main() {
 	flagJSON := flag.Bool("json", false, "output JSON lines")
 
 	// Resolver knobs
-	flagChrome := flag.String("chrome", defaultChromePath(), "path to Chrome/Chromium binary (or set CHROME_BIN)")
+	flagChrome := flag.String("chrome", chromepath.DefaultPath(), "path to Chrome/Chromium binary (or set CHROME_BIN)")
 	flagVT := flag.Int("vtbudget", 15000, "Chrome virtual time budget (ms)")
 	flagTimeout := flag.Duration("timeout", 30*time.Second, "per-ID timeout")
 	flagAttempt := flag.Duration("attempt-timeout", 15*time.Second, "per-attempt timeout (<= per-ID)")
@@ -50,9 +49,9 @@ func main() {
 
 	flag.Parse()
 
-	chromeBinaryPath := os.Getenv("CHROME_BIN")
+	chromeBinaryPath := strings.TrimSpace(os.Getenv(chromepath.EnvironmentVariableName))
 	if chromeBinaryPath == "" {
-		chromeBinaryPath = *flagChrome
+		chromeBinaryPath = strings.TrimSpace(*flagChrome)
 	}
 
 	ids := collectIDs(flag.Args())
@@ -151,64 +150,6 @@ func collectIDs(args []string) []string {
 		}
 	}
 	return out
-}
-
-// defaultChromePath detects a sensible Chrome/Chromium path per-OS.
-// Priority: CHROME_BIN (handled earlier), then common locations & PATH.
-func defaultChromePath() string {
-	// If CHROME_BIN is set, the caller will use it (handled in main).
-	// Here we try platform defaults and PATH lookups.
-	switch runtime.GOOS {
-	case "darwin":
-		// Standard macOS app bundle path
-		return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-	case "windows":
-		// Try PATH first
-		if p, err := exec.LookPath("chrome.exe"); err == nil {
-			return p
-		}
-		// Common install paths (best-effort; user can override with --chrome)
-		candidates := []string{
-			`C:\Program Files\Google\Chrome\Application\chrome.exe`,
-			`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
-		}
-		for _, c := range candidates {
-			if _, err := os.Stat(c); err == nil {
-				return c
-			}
-		}
-		// Fallback: let it be empty; user must supply --chrome
-		return "chrome.exe"
-	default: // "linux" and others
-		// Try common binary names in PATH
-		names := []string{
-			"google-chrome-stable",
-			"google-chrome",
-			"chromium",
-			"chromium-browser",
-			"chrome",
-		}
-		for _, n := range names {
-			if p, err := exec.LookPath(n); err == nil {
-				return p
-			}
-		}
-		// Try a few absolute paths often used by packages/snap
-		candidates := []string{
-			"/usr/bin/google-chrome-stable",
-			"/usr/bin/google-chrome",
-			"/usr/bin/chromium",
-			"/usr/bin/chromium-browser",
-			"/snap/bin/chromium",
-		}
-		for _, c := range candidates {
-			if _, err := os.Stat(c); err == nil {
-				return c
-			}
-		}
-		// Last resort: user must provide --chrome or CHROME_BIN
-		return "google-chrome"
-	}
 }
 
 func splitCSV(s string) []string {
