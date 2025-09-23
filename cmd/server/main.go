@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/f-sync/fsync/internal/cresolver"
 	"github.com/f-sync/fsync/internal/server"
+	"github.com/f-sync/fsync/internal/utils/chromepath"
+	"github.com/f-sync/fsync/internal/xresolver"
 )
 
 const (
@@ -32,6 +35,14 @@ const (
 	logMessageServerStopped          = "server stopped"
 	logMessageListenError            = "server listen failure"
 	logFieldAddress                  = "address"
+
+	defaultResolverVirtualTimeBudgetMS = 15000
+	defaultResolverPerIDTimeout        = 30 * time.Second
+	defaultResolverAttemptTimeout      = 15 * time.Second
+	defaultResolverRequestDelay        = 500 * time.Millisecond
+	defaultResolverRetryCount          = 1
+	defaultResolverRetryMinimum        = 400 * time.Millisecond
+	defaultResolverRetryMaximum        = 1500 * time.Millisecond
 )
 
 func main() {
@@ -76,7 +87,19 @@ func runServerCommand(*cobra.Command, []string) error {
 	}()
 
 	logger.Info(logMessageResolverInitialization)
-	resolver, resolverErr := cresolver.NewService(cresolver.Config{})
+	resolverConfig := cresolver.Config{
+		XResolver: xresolver.Config{
+			ChromePath:          chromepath.Discover(),
+			VirtualTimeBudgetMS: defaultResolverVirtualTimeBudgetMS,
+			PerIDTimeout:        defaultResolverPerIDTimeout,
+			AttemptTimeout:      defaultResolverAttemptTimeout,
+			Delay:               defaultResolverRequestDelay,
+			Retries:             defaultResolverRetryCount,
+			RetryMin:            defaultResolverRetryMinimum,
+			RetryMax:            defaultResolverRetryMaximum,
+		},
+	}
+	resolver, resolverErr := cresolver.NewService(resolverConfig)
 	if resolverErr != nil {
 		return fmt.Errorf("%s: %w", errMessageResolverCreate, resolverErr)
 	}
