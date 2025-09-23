@@ -2,21 +2,20 @@ package tests
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/f-sync/fsync/internal/handles"
+	"github.com/f-sync/fsync/internal/cresolver"
 	"github.com/f-sync/fsync/internal/server"
+	"github.com/f-sync/fsync/internal/utils/chromepath"
+	"github.com/f-sync/fsync/internal/xresolver"
 )
 
 const (
@@ -25,7 +24,7 @@ const (
 	serverIntegrationFlagDisabledMessage             = "server integration test skipped because the flag is disabled"
 	serverIntegrationChromeUnavailableMessage        = "server integration test skipped because no Chrome binary is available"
 	serverIntegrationRouterErrorFormat               = "server.NewRouter returned error: %v"
-	serverIntegrationResolverErrorFormat             = "handles.NewResolver returned error: %v"
+	serverIntegrationResolverErrorFormat             = "cresolver.NewService returned error: %v"
 	serverIntegrationRequestErrorFormat              = "HTTP %s %s failed: %v"
 	serverIntegrationUnexpectedStatusWithBodyFormat  = "unexpected status for %s %s: %d - %s"
 	serverIntegrationDecodeErrorFormat               = "decode %s response: %v"
@@ -54,6 +53,14 @@ const (
 	serverIntegrationHTTPTimeout                     = 30 * time.Second
 	serverIntegrationTaskTimeout                     = 2 * time.Minute
 	serverIntegrationTaskPollInterval                = 2 * time.Second
+	serverIntegrationVirtualTimeBudgetMS             = 15000
+	serverIntegrationPerIDTimeout                    = 30 * time.Second
+	serverIntegrationAttemptTimeout                  = 15 * time.Second
+	serverIntegrationRequestDelay                    = 500 * time.Millisecond
+	serverIntegrationRetryCount                      = 1
+	serverIntegrationRetryMinimum                    = 400 * time.Millisecond
+	serverIntegrationRetryMaximum                    = 1500 * time.Millisecond
+	serverIntegrationChromeFallbackErrorFormat       = "fallback chrome discovery failed (fallback error: %v, initial error: %v)"
 	serverIntegrationParseURLErrorFormat             = "parse test server URL: %v"
 	serverIntegrationCreateRequestErrorFormat        = "create %s request for %s: %v"
 	serverIntegrationMissingTaskIDMessage            = "task identifier missing in response"
@@ -62,8 +69,7 @@ const (
 	serverIntegrationFirstUploadLabel                = "first"
 	serverIntegrationSecondUploadLabel               = "second"
 
-	integrationSkipMessageFormat      = "%s: %v"
-	integrationChromeEmptyPathMessage = "resolved empty chrome binary path"
+	integrationSkipMessageFormat = "%s: %v"
 
 	integrationAccountIDElon           = "44196397"
 	integrationExpectedHandleElon      = "elonmusk"
@@ -252,12 +258,22 @@ func TestServerHandleResolutionIntegration(t *testing.T) {
 		t.Skipf(integrationSkipMessageFormat, serverIntegrationChromeUnavailableMessage, chromeErr)
 	}
 
-	resolver, err := handles.NewResolver(handles.Config{ChromeBinaryPath: chromePath})
+	resolverConfig := xresolver.Config{
+		ChromePath:          chromePath,
+		VirtualTimeBudgetMS: serverIntegrationVirtualTimeBudgetMS,
+		PerIDTimeout:        serverIntegrationPerIDTimeout,
+		AttemptTimeout:      serverIntegrationAttemptTimeout,
+		Delay:               serverIntegrationRequestDelay,
+		Retries:             serverIntegrationRetryCount,
+		RetryMin:            serverIntegrationRetryMinimum,
+		RetryMax:            serverIntegrationRetryMaximum,
+	}
+	resolverService, err := cresolver.NewService(cresolver.Config{XResolver: resolverConfig})
 	if err != nil {
 		t.Fatalf(serverIntegrationResolverErrorFormat, err)
 	}
 
-	router, err := server.NewRouter(server.RouterConfig{HandleResolver: resolver})
+	router, err := server.NewRouter(server.RouterConfig{HandleResolver: resolverService})
 	if err != nil {
 		t.Fatalf(serverIntegrationRouterErrorFormat, err)
 	}
@@ -304,20 +320,20 @@ func TestServerHandleResolutionIntegration(t *testing.T) {
 }
 
 func resolveChromeBinaryPathForIntegration() (string, error) {
-	resolvedPath := handles.ResolveChromeBinaryPath(handles.Config{})
-	trimmedPath := strings.TrimSpace(resolvedPath)
-	if trimmedPath == "" {
-		return "", errors.New(integrationChromeEmptyPathMessage)
+	discoveredPath := chromepath.Discover()
+	resolvedPath, resolveErr := chromepath.ResolveExecutablePath(discoveredPath)
+	if resolveErr == nil {
+		return resolvedPath, nil
 	}
-	if strings.ContainsRune(trimmedPath, os.PathSeparator) {
-		if _, statErr := os.Stat(trimmedPath); statErr != nil {
-			return "", statErr
-		}
-		return trimmedPath, nil
+
+	fallbackPath := chromepath.DefaultPath()
+	if strings.TrimSpace(fallbackPath) == strings.TrimSpace(discoveredPath) {
+		return "", resolveErr
 	}
-	lookedPath, lookErr := exec.LookPath(trimmedPath)
-	if lookErr != nil {
-		return "", lookErr
+
+	verifiedPath, fallbackErr := chromepath.ResolveExecutablePath(fallbackPath)
+	if fallbackErr != nil {
+		return "", fmt.Errorf(serverIntegrationChromeFallbackErrorFormat, fallbackErr, resolveErr)
 	}
-	return lookedPath, nil
+	return verifiedPath, nil
 }
