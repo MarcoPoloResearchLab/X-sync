@@ -18,7 +18,9 @@ const (
 	defaultVirtualTimeBudgetMilliseconds = 15000
 
 	chromeHeadlessFlagKey              = "headless"
+	chromeHeadlessModeNewValue         = "new"
 	chromeDisableGPUFlagKey            = "disable-gpu"
+	chromeDisableGPUStartupFlagKey     = "disable-gpu-startup"
 	chromeUseGLFlagKey                 = "use-gl"
 	chromeUseGLSwiftShaderValue        = "swiftshader"
 	chromeEnableUnsafeSwiftShaderFlag  = "enable-unsafe-swiftshader"
@@ -92,8 +94,9 @@ func (r *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBu
 	}
 
 	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:], []chromedp.ExecAllocatorOption{
-		chromedp.Flag(chromeHeadlessFlagKey, true),
+		chromedp.Flag(chromeHeadlessFlagKey, chromeHeadlessModeNewValue),
 		chromedp.Flag(chromeDisableGPUFlagKey, true),
+		chromedp.Flag(chromeDisableGPUStartupFlagKey, true),
 		chromedp.Flag(chromeUseGLFlagKey, chromeUseGLSwiftShaderValue),
 		chromedp.Flag(chromeEnableUnsafeSwiftShaderFlag, true),
 		chromedp.Flag(chromeHideScrollbarsFlagKey, true),
