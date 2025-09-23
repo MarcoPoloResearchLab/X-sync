@@ -30,8 +30,10 @@ const (
 	chromeLogLevelFlagKey              = "log-level"
 	chromeSilentFlagKey                = "silent"
 	chromeDisableLoggingFlagKey        = "disable-logging"
+	chromeUserAgentFlagKey             = "user-agent"
 	chromeVirtualTimeBudgetFlagKey     = "virtual-time-budget"
 	chromeSilentLogLevelValue          = "3"
+	chromeRendererEmptyURLErrorMessage = "empty url"
 
 	documentBodyCSSSelector       = "body"
 	documentHTMLNodeQuerySelector = "html"
@@ -88,12 +90,20 @@ type ChromeRenderer struct{}
 
 func NewChromeRenderer() *ChromeRenderer { return &ChromeRenderer{} }
 
-func (r *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBudgetMS int, chromePath string) (string, error) {
-	if vtBudgetMS <= 0 {
-		vtBudgetMS = defaultVirtualTimeBudgetMilliseconds
+func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBudgetMS int, chromePath string) (string, error) {
+	effectiveBudget := vtBudgetMS
+	if effectiveBudget <= 0 {
+		effectiveBudget = defaultVirtualTimeBudgetMilliseconds
 	}
 
-	allocatorOptions := append(chromedp.DefaultExecAllocatorOptions[:], []chromedp.ExecAllocatorOption{
+	trimmedURL := strings.TrimSpace(url)
+	if trimmedURL == "" {
+		return "", fmt.Errorf(chromeRendererEmptyURLErrorMessage)
+	}
+
+	trimmedUserAgent := strings.TrimSpace(userAgent)
+	allocatorOptions := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
+	allocatorOptions = append(allocatorOptions,
 		chromedp.Flag(chromeHeadlessFlagKey, chromeHeadlessModeNewValue),
 		chromedp.Flag(chromeDisableGPUFlagKey, true),
 		chromedp.Flag(chromeDisableGPUStartupFlagKey, true),
@@ -105,10 +115,16 @@ func (r *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBu
 		chromedp.Flag(chromeLogLevelFlagKey, chromeSilentLogLevelValue),
 		chromedp.Flag(chromeSilentFlagKey, true),
 		chromedp.Flag(chromeDisableLoggingFlagKey, true),
-		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(vtBudgetMS)),
-	}...)
-	if chromePath != "" {
-		allocatorOptions = append(allocatorOptions, chromedp.ExecPath(chromePath))
+		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
+	)
+
+	if trimmedUserAgent != "" {
+		allocatorOptions = append(allocatorOptions, chromedp.Flag(chromeUserAgentFlagKey, trimmedUserAgent))
+	}
+
+	trimmedChromePath := strings.TrimSpace(chromePath)
+	if trimmedChromePath != "" {
+		allocatorOptions = append(allocatorOptions, chromedp.ExecPath(trimmedChromePath))
 	}
 
 	allocatorCtx, cancelAllocator := chromedp.NewExecAllocator(ctx, allocatorOptions...)
@@ -122,13 +138,17 @@ func (r *ChromeRenderer) Render(ctx context.Context, userAgent, url string, vtBu
 		chromedp.ActionFunc(func(chromedpCtx context.Context) error {
 			return network.Enable().Do(chromedpCtx)
 		}),
-		chromedp.ActionFunc(func(chromedpCtx context.Context) error {
-			return emulation.SetUserAgentOverride(userAgent).Do(chromedpCtx)
-		}),
-		chromedp.Navigate(url),
+	}
+	if trimmedUserAgent != "" {
+		renderTasks = append(renderTasks, chromedp.ActionFunc(func(chromedpCtx context.Context) error {
+			return emulation.SetUserAgentOverride(trimmedUserAgent).Do(chromedpCtx)
+		}))
+	}
+	renderTasks = append(renderTasks,
+		chromedp.Navigate(trimmedURL),
 		chromedp.WaitReady(documentBodyCSSSelector, chromedp.ByQuery),
 		chromedp.OuterHTML(documentHTMLNodeQuerySelector, &htmlContent, chromedp.ByQuery),
-	}
+	)
 
 	if err := chromedp.Run(chromeCtx, renderTasks...); err != nil {
 		return "", err
