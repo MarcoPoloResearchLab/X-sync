@@ -3,6 +3,11 @@ package xresolver
 
 import "regexp"
 
+const (
+	chromeRemoteAllowOriginsFlagKey = "remote-allow-origins"
+	chromeRemoteAllowOriginsValue   = "*"
+)
+
 var (
 	// Matches full profile URLs we later strip to a handle
 	ProfileURLRegex = regexp.MustCompile(`https://(?:x|twitter)\.com/[A-Za-z0-9_]{1,15}`)

@@ -141,6 +141,7 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeSilentFlagKey, true),
 		chromedp.Flag(chromeDisableLoggingFlagKey, true),
 		chromedp.Flag(chromeIgnoreCertificateErrorsFlag, true),
+		chromedp.Flag(chromeRemoteAllowOriginsFlagKey, chromeRemoteAllowOriginsValue),
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
 	)
 
@@ -237,6 +238,7 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 // Service resolves X/Twitter user IDs to handles (and display names).
 type Service struct {
 	cfg      Config
+	rndMu    sync.Mutex
 	rnd      *rand.Rand
 	renderer Renderer
 }
@@ -392,9 +394,10 @@ func (s *Service) resolveWithRetries(ctx context.Context, id string) Profile {
 
 func (s *Service) pickUA() string {
 	if len(s.cfg.UserAgents) == 0 {
-		return DefaultChromeUserAgent(s.rnd)
+		return s.defaultChromeUserAgent()
 	}
-	return s.cfg.UserAgents[s.rnd.Intn(len(s.cfg.UserAgents))]
+	idx := s.randIntn(len(s.cfg.UserAgents))
+	return s.cfg.UserAgents[idx]
 }
 
 // DefaultChromeUserAgent returns a reasonable UA when none provided.
@@ -412,7 +415,7 @@ func (s *Service) jitterDuration(base, jitter time.Duration) time.Duration {
 	if jitter <= 0 {
 		return base
 	}
-	offset := (s.rnd.Float64()*2 - 1) * float64(jitter)
+	offset := (s.randFloat64()*2 - 1) * float64(jitter)
 	d := time.Duration(float64(base) + offset)
 	if d < 0 {
 		return 0
@@ -456,8 +459,32 @@ func (s *Service) backoffDuration(attempt int) time.Duration {
 	}
 	// add small jitter (+/- 25%)
 	j := time.Duration(0.25 * float64(d))
-	offset := (s.rnd.Float64()*2 - 1) * float64(j)
+	offset := (s.randFloat64()*2 - 1) * float64(j)
 	return time.Duration(float64(d) + offset)
+}
+
+func (s *Service) defaultChromeUserAgent() string {
+	s.rndMu.Lock()
+	defer s.rndMu.Unlock()
+	return DefaultChromeUserAgent(s.rnd)
+}
+
+func (s *Service) randFloat64() float64 {
+	s.rndMu.Lock()
+	defer s.rndMu.Unlock()
+	if s.rnd == nil {
+		return rand.Float64()
+	}
+	return s.rnd.Float64()
+}
+
+func (s *Service) randIntn(n int) int {
+	s.rndMu.Lock()
+	defer s.rndMu.Unlock()
+	if s.rnd == nil {
+		return rand.Intn(n)
+	}
+	return s.rnd.Intn(n)
 }
 
 // ===== Helpers (pure) =====
