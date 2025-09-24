@@ -23,54 +23,58 @@ import (
 const (
 	defaultVirtualTimeBudgetMilliseconds = 15000
 
-	chromeHeadlessFlagKey                = "headless"
-	chromeHeadlessModeNewValue           = "new"
-	chromeDisableGPUFlagKey              = "disable-gpu"
-	chromeDisableGPUStartupFlagKey       = "disable-gpu-startup"
-	chromeDisableDevShmUsageFlagKey      = "disable-dev-shm-usage"
-	chromeUseGLFlagKey                   = "use-gl"
-	chromeUseGLSwiftShaderValue          = "swiftshader"
-	chromeEnableUnsafeSwiftShaderFlag    = "enable-unsafe-swiftshader"
-	chromeNoSandboxFlagKey               = "no-sandbox"
-	chromeDisableSetuidSandboxFlagKey    = "disable-setuid-sandbox"
-	chromeEnableAutomationFlagKey        = "enable-automation"
-	chromeDisableBlinkFeaturesFlagKey    = "disable-blink-features"
-	chromeAutomationControlledBlinkValue = "AutomationControlled"
-	chromeHideScrollbarsFlagKey          = "hide-scrollbars"
-	chromeNoFirstRunFlagKey              = "no-first-run"
-	chromeNoDefaultBrowserCheckFlagKey   = "no-default-browser-check"
-	chromeLogLevelFlagKey                = "log-level"
-	chromeSilentFlagKey                  = "silent"
-	chromeDisableLoggingFlagKey          = "disable-logging"
-	chromeIgnoreCertificateErrorsFlag    = "ignore-certificate-errors"
-	chromeUserAgentFlagKey               = "user-agent"
-	chromeVirtualTimeBudgetFlagKey       = "virtual-time-budget"
-	chromeProxyServerFlagKey             = "proxy-server"
-	httpsProxyEnvironmentUpper           = "HTTPS_PROXY"
-	httpsProxyEnvironmentLower           = "https_proxy"
-	httpProxyEnvironmentUpper            = "HTTP_PROXY"
-	httpProxyEnvironmentLower            = "http_proxy"
-	allProxyEnvironmentUpper             = "ALL_PROXY"
-	allProxyEnvironmentLower             = "all_proxy"
-	noProxyEnvironmentUpper              = "NO_PROXY"
-	noProxyEnvironmentLower              = "no_proxy"
-	chromeSilentLogLevelValue            = "3"
-	chromeRendererEmptyURLErrorMessage   = "empty url"
-	chromeLogNavigationStartMessage      = "chromedp navigate: user-agent=%q url=%s"
-	chromeLogNavigationSuccessMessage    = "chromedp render success: url=%s bytes=%d"
-	chromeLogNavigationErrorMessage      = "chromedp render failure: url=%s err=%v"
-	chromeLogNetworkRequestMessage       = "chromedp network request: url=%s"
-	chromeLogNetworkResponseMessage      = "chromedp network response: url=%s status=%d"
-	chromeLogNetworkFailureMessage       = "chromedp network failure: url=%s error=%s canceled=%v"
-	chromeLogTargetCrashMessage          = "chromedp target crashed"
+	chromeHeadlessFlagKey                             = "headless"
+	chromeDisableGPUFlagKey                           = "disable-gpu"
+	chromeDisableGPUStartupFlagKey                    = "disable-gpu-startup"
+	chromeDisableDevShmUsageFlagKey                   = "disable-dev-shm-usage"
+	chromeUseGLFlagKey                                = "use-gl"
+	chromeUseGLSwiftShaderValue                       = "swiftshader"
+	chromeEnableUnsafeSwiftShaderFlag                 = "enable-unsafe-swiftshader"
+	chromeNoSandboxFlagKey                            = "no-sandbox"
+	chromeDisableSetuidSandboxFlagKey                 = "disable-setuid-sandbox"
+	chromeEnableAutomationFlagKey                     = "enable-automation"
+	chromeDisableBlinkFeaturesFlagKey                 = "disable-blink-features"
+	chromeAutomationControlledBlinkValue              = "AutomationControlled"
+	chromeDisableExtensionsFlagKey                    = "disable-extensions"
+	chromeDisableComponentExtensionsBackgroundFlagKey = "disable-component-extensions-with-background-pages"
+	chromeHideScrollbarsFlagKey                       = "hide-scrollbars"
+	chromeNoFirstRunFlagKey                           = "no-first-run"
+	chromeNoDefaultBrowserCheckFlagKey                = "no-default-browser-check"
+	chromeLogLevelFlagKey                             = "log-level"
+	chromeSilentFlagKey                               = "silent"
+	chromeDisableLoggingFlagKey                       = "disable-logging"
+	chromeIgnoreCertificateErrorsFlag                 = "ignore-certificate-errors"
+	chromeUserAgentFlagKey                            = "user-agent"
+	chromeVirtualTimeBudgetFlagKey                    = "virtual-time-budget"
+	chromeProxyServerFlagKey                          = "proxy-server"
+	httpsProxyEnvironmentUpper                        = "HTTPS_PROXY"
+	httpsProxyEnvironmentLower                        = "https_proxy"
+	httpProxyEnvironmentUpper                         = "HTTP_PROXY"
+	httpProxyEnvironmentLower                         = "http_proxy"
+	allProxyEnvironmentUpper                          = "ALL_PROXY"
+	allProxyEnvironmentLower                          = "all_proxy"
+	noProxyEnvironmentUpper                           = "NO_PROXY"
+	noProxyEnvironmentLower                           = "no_proxy"
+	chromeSilentLogLevelValue                         = "3"
+	chromeRendererEmptyURLErrorMessage                = "empty url"
+	chromeLogNavigationStartMessage                   = "chromedp navigate: user-agent=%q url=%s"
+	chromeLogNavigationSuccessMessage                 = "chromedp render success: url=%s bytes=%d"
+	chromeLogNavigationErrorMessage                   = "chromedp render failure: url=%s err=%v"
+	chromeLogNetworkRequestMessage                    = "chromedp network request: url=%s"
+	chromeLogNetworkResponseMessage                   = "chromedp network response: url=%s status=%d"
+	chromeLogNetworkFailureMessage                    = "chromedp network failure: url=%s error=%s canceled=%v"
+	chromeLogTargetCrashMessage                       = "chromedp target crashed"
 
 	acceptLanguageHeaderName           = "Accept-Language"
 	acceptLanguageHeaderValue          = "en-US,en;q=0.9"
 	upgradeInsecureRequestsHeaderName  = "Upgrade-Insecure-Requests"
 	upgradeInsecureRequestsHeaderValue = "1"
 
-	documentBodyCSSSelector       = "body"
-	documentHTMLNodeQuerySelector = "html"
+	documentReadyStateScript             = "document.readyState"
+	documentReadyStateCompleteValue      = "complete"
+	documentReadyStatePollInterval       = 100 * time.Millisecond
+	documentOuterHTMLScript              = "document.documentElement.outerHTML"
+	documentOuterHTMLNilDestinationError = "html destination pointer is nil"
 
 	navigatorPlatformMacValue     = "MacIntel"
 	navigatorPlatformWindowsValue = "Win32"
@@ -179,7 +183,7 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 	trimmedUserAgent := strings.TrimSpace(userAgent)
 	allocatorOptions := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	allocatorOptions = append(allocatorOptions,
-		chromedp.Flag(chromeHeadlessFlagKey, chromeHeadlessModeNewValue),
+		chromedp.Flag(chromeHeadlessFlagKey, true),
 		chromedp.Flag(chromeDisableGPUFlagKey, true),
 		chromedp.Flag(chromeDisableGPUStartupFlagKey, true),
 		chromedp.Flag(chromeDisableDevShmUsageFlagKey, true),
@@ -198,6 +202,8 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
 		chromedp.Flag(chromeEnableAutomationFlagKey, false),
 		chromedp.Flag(chromeDisableBlinkFeaturesFlagKey, chromeAutomationControlledBlinkValue),
+		chromedp.Flag(chromeDisableExtensionsFlagKey, true),
+		chromedp.Flag(chromeDisableComponentExtensionsBackgroundFlagKey, true),
 	)
 
 	if proxyValue := chromeProxyServerValue(trimmedURL); proxyValue != "" {
@@ -275,8 +281,10 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 	}
 	renderTasks = append(renderTasks,
 		chromedp.Navigate(trimmedURL),
-		chromedp.WaitReady(documentBodyCSSSelector, chromedp.ByQuery),
-		chromedp.OuterHTML(documentHTMLNodeQuerySelector, &htmlContent, chromedp.ByQuery),
+		chromedp.ActionFunc(waitForDocumentReadyStateComplete),
+		chromedp.ActionFunc(func(chromedpCtx context.Context) error {
+			return readDocumentOuterHTML(chromedpCtx, &htmlContent)
+		}),
 	)
 
 	if err := chromedp.Run(chromeCtx, renderTasks...); err != nil {
@@ -628,6 +636,47 @@ func applyUserAgentOverride(chromedpCtx context.Context, userAgent string) error
 		userAgentOverride = userAgentOverride.WithUserAgentMetadata(metadata)
 	}
 	return userAgentOverride.Do(chromedpCtx)
+}
+
+func waitForDocumentReadyStateComplete(chromedpCtx context.Context) error {
+	ticker := time.NewTicker(documentReadyStatePollInterval)
+	defer ticker.Stop()
+
+	var lastEvaluationError error
+	for {
+		var readyStateValue string
+		evaluationErr := chromedp.Evaluate(documentReadyStateScript, &readyStateValue, chromedp.EvalAsValue).Do(chromedpCtx)
+		if evaluationErr == nil {
+			lastEvaluationError = nil
+			if strings.EqualFold(strings.TrimSpace(readyStateValue), documentReadyStateCompleteValue) {
+				return nil
+			}
+		} else {
+			lastEvaluationError = evaluationErr
+		}
+
+		select {
+		case <-chromedpCtx.Done():
+			if lastEvaluationError != nil {
+				return lastEvaluationError
+			}
+			return chromedpCtx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func readDocumentOuterHTML(chromedpCtx context.Context, htmlContentDestination *string) error {
+	if htmlContentDestination == nil {
+		return fmt.Errorf(documentOuterHTMLNilDestinationError)
+	}
+
+	var documentOuterHTML string
+	if err := chromedp.Evaluate(documentOuterHTMLScript, &documentOuterHTML, chromedp.EvalAsValue).Do(chromedpCtx); err != nil {
+		return err
+	}
+	*htmlContentDestination = documentOuterHTML
+	return nil
 }
 
 func navigatorPlatformForUserAgent(userAgent string) string {
