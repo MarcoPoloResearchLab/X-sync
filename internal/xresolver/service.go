@@ -5,6 +5,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net"
+	neturl "net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +39,15 @@ const (
 	chromeVirtualTimeBudgetFlagKey     = "virtual-time-budget"
 	chromeRemoteAllowOriginsFlagKey    = "remote-allow-origins"
 	chromeRemoteAllowOriginsValue      = "*"
+	chromeProxyServerFlagKey           = "proxy-server"
+	httpsProxyEnvironmentUpper         = "HTTPS_PROXY"
+	httpsProxyEnvironmentLower         = "https_proxy"
+	httpProxyEnvironmentUpper          = "HTTP_PROXY"
+	httpProxyEnvironmentLower          = "http_proxy"
+	allProxyEnvironmentUpper           = "ALL_PROXY"
+	allProxyEnvironmentLower           = "all_proxy"
+	noProxyEnvironmentUpper            = "NO_PROXY"
+	noProxyEnvironmentLower            = "no_proxy"
 	chromeSilentLogLevelValue          = "3"
 	chromeRendererEmptyURLErrorMessage = "empty url"
 
@@ -123,6 +135,10 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeRemoteAllowOriginsFlagKey, chromeRemoteAllowOriginsValue),
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
 	)
+
+	if proxyValue := chromeProxyServerValue(trimmedURL); proxyValue != "" {
+		allocatorOptions = append(allocatorOptions, chromedp.Flag(chromeProxyServerFlagKey, proxyValue))
+	}
 
 	if trimmedUserAgent != "" {
 		allocatorOptions = append(allocatorOptions, chromedp.Flag(chromeUserAgentFlagKey, trimmedUserAgent))
@@ -433,6 +449,130 @@ func firstGroup(m []string) string {
 		return m[1]
 	}
 	return ""
+}
+
+func chromeProxyServerValue(targetURL string) string {
+	normalizedURL := strings.TrimSpace(targetURL)
+	if normalizedURL == "" {
+		return ""
+	}
+
+	parsedURL, parseErr := neturl.Parse(normalizedURL)
+	if parseErr != nil {
+		return ""
+	}
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return ""
+	}
+
+	proxyCandidate := firstNonEmptyEnvValue(proxyEnvironmentKeys(parsedURL.Scheme)...)
+	if proxyCandidate == "" && parsedURL.Scheme == "https" {
+		proxyCandidate = firstNonEmptyEnvValue(proxyEnvironmentKeys("http")...)
+	}
+	if proxyCandidate == "" {
+		proxyCandidate = firstNonEmptyEnvValue(allProxyEnvironmentUpper, allProxyEnvironmentLower)
+	}
+	if proxyCandidate == "" {
+		return ""
+	}
+
+	if bypassProxy(parsedURL, firstNonEmptyEnvValue(noProxyEnvironmentUpper, noProxyEnvironmentLower)) {
+		return ""
+	}
+
+	parsedProxyURL, proxyParseErr := neturl.Parse(proxyCandidate)
+	if proxyParseErr != nil || strings.TrimSpace(parsedProxyURL.Host) == "" {
+		return ""
+	}
+	return proxyCandidate
+}
+
+func proxyEnvironmentKeys(scheme string) []string {
+	switch scheme {
+	case "https":
+		return []string{httpsProxyEnvironmentUpper, httpsProxyEnvironmentLower}
+	case "http":
+		return []string{httpProxyEnvironmentUpper, httpProxyEnvironmentLower}
+	default:
+		return nil
+	}
+}
+
+func firstNonEmptyEnvValue(environmentKeys ...string) string {
+	for _, key := range environmentKeys {
+		if key == "" {
+			continue
+		}
+		if value, present := os.LookupEnv(key); present {
+			trimmed := strings.TrimSpace(value)
+			if trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
+}
+
+func bypassProxy(targetURL *neturl.URL, noProxyList string) bool {
+	if strings.TrimSpace(noProxyList) == "" {
+		return false
+	}
+	host := strings.ToLower(targetURL.Hostname())
+	port := targetURL.Port()
+	if port == "" {
+		port = defaultPortForScheme(targetURL.Scheme)
+	}
+	if host == "" {
+		return false
+	}
+
+	entries := strings.Split(noProxyList, ",")
+	for _, entry := range entries {
+		trimmedEntry := strings.TrimSpace(entry)
+		if trimmedEntry == "" {
+			continue
+		}
+		if trimmedEntry == "*" {
+			return true
+		}
+
+		entryHost := trimmedEntry
+		entryPort := ""
+		if strings.Contains(trimmedEntry, ":") {
+			parsedHost, parsedPort, splitErr := net.SplitHostPort(trimmedEntry)
+			if splitErr == nil {
+				entryHost = parsedHost
+				entryPort = parsedPort
+			}
+		}
+
+		normalizedEntryHost := strings.ToLower(strings.TrimPrefix(entryHost, "."))
+		if normalizedEntryHost == "" {
+			continue
+		}
+		if entryPort != "" && entryPort != port {
+			continue
+		}
+
+		if host == normalizedEntryHost {
+			return true
+		}
+		if strings.HasSuffix(host, "."+normalizedEntryHost) {
+			return true
+		}
+	}
+	return false
+}
+
+func defaultPortForScheme(scheme string) string {
+	switch strings.ToLower(scheme) {
+	case "https":
+		return "443"
+	case "http":
+		return "80"
+	default:
+		return ""
+	}
 }
 
 func condErr(s string) any {

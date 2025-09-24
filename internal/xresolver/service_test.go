@@ -204,3 +204,79 @@ func TestChromeRendererMissingBinary(t *testing.T) {
 		t.Fatalf("expected error to reference chrome path %q, got %v", chromeMissingBinaryPath, err)
 	}
 }
+
+func TestChromeProxyServerValue(t *testing.T) {
+	testCases := []struct {
+		name          string
+		targetURL     string
+		environment   map[string]string
+		expectedProxy string
+	}{
+		{
+			name:      "https proxy available",
+			targetURL: "https://example.com/resource",
+			environment: map[string]string{
+				"HTTPS_PROXY": "http://corp.example:8443",
+				"https_proxy": "http://corp.example:8443",
+				"HTTP_PROXY":  "http://fallback.example:8080",
+				"http_proxy":  "http://fallback.example:8080",
+				"NO_PROXY":    "",
+				"no_proxy":    "",
+			},
+			expectedProxy: "http://corp.example:8443",
+		},
+		{
+			name:      "fallback to http proxy",
+			targetURL: "https://example.com/resource",
+			environment: map[string]string{
+				"HTTPS_PROXY": "",
+				"https_proxy": "",
+				"HTTP_PROXY":  "http://fallback.example:8080",
+				"http_proxy":  "http://fallback.example:8080",
+				"NO_PROXY":    "",
+				"no_proxy":    "",
+			},
+			expectedProxy: "http://fallback.example:8080",
+		},
+		{
+			name:      "no proxy due to bypass list",
+			targetURL: "https://internal.example",
+			environment: map[string]string{
+				"HTTPS_PROXY": "http://corp.example:8443",
+				"https_proxy": "http://corp.example:8443",
+				"HTTP_PROXY":  "http://fallback.example:8080",
+				"http_proxy":  "http://fallback.example:8080",
+				"NO_PROXY":    "internal.example,localhost",
+				"no_proxy":    "internal.example,localhost",
+			},
+			expectedProxy: "",
+		},
+		{
+			name:      "invalid url",
+			targetURL: "::not-a-url::",
+			environment: map[string]string{
+				"HTTPS_PROXY": "http://corp.example:8443",
+				"https_proxy": "http://corp.example:8443",
+			},
+			expectedProxy: "",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			proxyEnvironmentVariables := []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"}
+			for _, variableName := range proxyEnvironmentVariables {
+				t.Setenv(variableName, "")
+			}
+			for key, value := range testCase.environment {
+				t.Setenv(key, value)
+			}
+
+			actualProxy := chromeProxyServerValue(testCase.targetURL)
+			if actualProxy != testCase.expectedProxy {
+				t.Fatalf("expected proxy %q, got %q", testCase.expectedProxy, actualProxy)
+			}
+		})
+	}
+}
