@@ -29,6 +29,8 @@ const (
 	chromeUseGLFlagKey                 = "use-gl"
 	chromeUseGLSwiftShaderValue        = "swiftshader"
 	chromeEnableUnsafeSwiftShaderFlag  = "enable-unsafe-swiftshader"
+	chromeRemoteAllowOriginsFlagKey    = "remote-allow-origins"
+	chromeRemoteAllowOriginsValue      = "*"
 	chromeHideScrollbarsFlagKey        = "hide-scrollbars"
 	chromeNoFirstRunFlagKey            = "no-first-run"
 	chromeNoDefaultBrowserCheckFlagKey = "no-default-browser-check"
@@ -133,6 +135,7 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeDisableGPUStartupFlagKey, true),
 		chromedp.Flag(chromeUseGLFlagKey, chromeUseGLSwiftShaderValue),
 		chromedp.Flag(chromeEnableUnsafeSwiftShaderFlag, true),
+		chromedp.Flag(chromeRemoteAllowOriginsFlagKey, chromeRemoteAllowOriginsValue),
 		chromedp.Flag(chromeHideScrollbarsFlagKey, true),
 		chromedp.Flag(chromeNoFirstRunFlagKey, true),
 		chromedp.Flag(chromeNoDefaultBrowserCheckFlagKey, true),
