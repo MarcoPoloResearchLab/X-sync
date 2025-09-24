@@ -15,6 +15,7 @@ import (
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
@@ -22,47 +23,96 @@ import (
 const (
 	defaultVirtualTimeBudgetMilliseconds = 15000
 
-	chromeHeadlessFlagKey              = "headless"
-	chromeHeadlessModeNewValue         = "new"
-	chromeDisableGPUFlagKey            = "disable-gpu"
-	chromeDisableGPUStartupFlagKey     = "disable-gpu-startup"
-	chromeDisableDevShmUsageFlagKey    = "disable-dev-shm-usage"
-	chromeUseGLFlagKey                 = "use-gl"
-	chromeUseGLSwiftShaderValue        = "swiftshader"
-	chromeEnableUnsafeSwiftShaderFlag  = "enable-unsafe-swiftshader"
-	chromeNoSandboxFlagKey             = "no-sandbox"
-	chromeDisableSetuidSandboxFlagKey  = "disable-setuid-sandbox"
-	chromeHideScrollbarsFlagKey        = "hide-scrollbars"
-	chromeNoFirstRunFlagKey            = "no-first-run"
-	chromeNoDefaultBrowserCheckFlagKey = "no-default-browser-check"
-	chromeLogLevelFlagKey              = "log-level"
-	chromeSilentFlagKey                = "silent"
-	chromeDisableLoggingFlagKey        = "disable-logging"
-	chromeIgnoreCertificateErrorsFlag  = "ignore-certificate-errors"
-	chromeUserAgentFlagKey             = "user-agent"
-	chromeVirtualTimeBudgetFlagKey     = "virtual-time-budget"
-	chromeProxyServerFlagKey           = "proxy-server"
-	httpsProxyEnvironmentUpper         = "HTTPS_PROXY"
-	httpsProxyEnvironmentLower         = "https_proxy"
-	httpProxyEnvironmentUpper          = "HTTP_PROXY"
-	httpProxyEnvironmentLower          = "http_proxy"
-	allProxyEnvironmentUpper           = "ALL_PROXY"
-	allProxyEnvironmentLower           = "all_proxy"
-	noProxyEnvironmentUpper            = "NO_PROXY"
-	noProxyEnvironmentLower            = "no_proxy"
-	chromeSilentLogLevelValue          = "3"
-	chromeRendererEmptyURLErrorMessage = "empty url"
-	chromeLogNavigationStartMessage    = "chromedp navigate: user-agent=%q url=%s"
-	chromeLogNavigationSuccessMessage  = "chromedp render success: url=%s bytes=%d"
-	chromeLogNavigationErrorMessage    = "chromedp render failure: url=%s err=%v"
-	chromeLogNetworkRequestMessage     = "chromedp network request: url=%s"
-	chromeLogNetworkResponseMessage    = "chromedp network response: url=%s status=%d"
-	chromeLogNetworkFailureMessage     = "chromedp network failure: url=%s error=%s canceled=%v"
-	chromeLogTargetCrashMessage        = "chromedp target crashed"
+	chromeHeadlessFlagKey                = "headless"
+	chromeHeadlessModeNewValue           = "new"
+	chromeDisableGPUFlagKey              = "disable-gpu"
+	chromeDisableGPUStartupFlagKey       = "disable-gpu-startup"
+	chromeDisableDevShmUsageFlagKey      = "disable-dev-shm-usage"
+	chromeUseGLFlagKey                   = "use-gl"
+	chromeUseGLSwiftShaderValue          = "swiftshader"
+	chromeEnableUnsafeSwiftShaderFlag    = "enable-unsafe-swiftshader"
+	chromeNoSandboxFlagKey               = "no-sandbox"
+	chromeDisableSetuidSandboxFlagKey    = "disable-setuid-sandbox"
+	chromeEnableAutomationFlagKey        = "enable-automation"
+	chromeDisableBlinkFeaturesFlagKey    = "disable-blink-features"
+	chromeAutomationControlledBlinkValue = "AutomationControlled"
+	chromeHideScrollbarsFlagKey          = "hide-scrollbars"
+	chromeNoFirstRunFlagKey              = "no-first-run"
+	chromeNoDefaultBrowserCheckFlagKey   = "no-default-browser-check"
+	chromeLogLevelFlagKey                = "log-level"
+	chromeSilentFlagKey                  = "silent"
+	chromeDisableLoggingFlagKey          = "disable-logging"
+	chromeIgnoreCertificateErrorsFlag    = "ignore-certificate-errors"
+	chromeUserAgentFlagKey               = "user-agent"
+	chromeVirtualTimeBudgetFlagKey       = "virtual-time-budget"
+	chromeProxyServerFlagKey             = "proxy-server"
+	httpsProxyEnvironmentUpper           = "HTTPS_PROXY"
+	httpsProxyEnvironmentLower           = "https_proxy"
+	httpProxyEnvironmentUpper            = "HTTP_PROXY"
+	httpProxyEnvironmentLower            = "http_proxy"
+	allProxyEnvironmentUpper             = "ALL_PROXY"
+	allProxyEnvironmentLower             = "all_proxy"
+	noProxyEnvironmentUpper              = "NO_PROXY"
+	noProxyEnvironmentLower              = "no_proxy"
+	chromeSilentLogLevelValue            = "3"
+	chromeRendererEmptyURLErrorMessage   = "empty url"
+	chromeLogNavigationStartMessage      = "chromedp navigate: user-agent=%q url=%s"
+	chromeLogNavigationSuccessMessage    = "chromedp render success: url=%s bytes=%d"
+	chromeLogNavigationErrorMessage      = "chromedp render failure: url=%s err=%v"
+	chromeLogNetworkRequestMessage       = "chromedp network request: url=%s"
+	chromeLogNetworkResponseMessage      = "chromedp network response: url=%s status=%d"
+	chromeLogNetworkFailureMessage       = "chromedp network failure: url=%s error=%s canceled=%v"
+	chromeLogTargetCrashMessage          = "chromedp target crashed"
+
+	acceptLanguageHeaderName           = "Accept-Language"
+	acceptLanguageHeaderValue          = "en-US,en;q=0.9"
+	upgradeInsecureRequestsHeaderName  = "Upgrade-Insecure-Requests"
+	upgradeInsecureRequestsHeaderValue = "1"
 
 	documentBodyCSSSelector       = "body"
 	documentHTMLNodeQuerySelector = "html"
+
+	navigatorPlatformMacValue     = "MacIntel"
+	navigatorPlatformWindowsValue = "Win32"
+	navigatorPlatformLinuxValue   = "Linux x86_64"
+
+	navigatorWebdriverOverrideScript    = "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
+	navigatorLanguagesOverrideScript    = "Object.defineProperty(navigator, 'languages', { get: () => ['en-US','en'] });"
+	navigatorPluginsOverrideScript      = "Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });"
+	windowChromeRuntimeDefinitionScript = "window.chrome = window.chrome || {}; window.chrome.runtime = {};"
+	navigatorPermissionsOverrideScript  = "const originalQuery = window.navigator.permissions.query; window.navigator.permissions.query = (parameters) => (parameters && parameters.name === 'notifications' ? Promise.resolve({ state: 'default' }) : originalQuery(parameters));"
+
+	userAgentChromeMarker           = "Chrome/"
+	userAgentMacintoshToken         = "macintosh"
+	userAgentWindowsToken           = "windows"
+	userAgentLinuxToken             = "linux"
+	userAgentMacVersionToken        = "Mac OS X "
+	userAgentWindowsVersionToken    = "Windows NT "
+	userAgentTokenUnderscore        = "_"
+	userAgentPlatformMacOS          = "macOS"
+	userAgentPlatformWindows        = "Windows"
+	userAgentPlatformLinux          = "Linux"
+	userAgentPlatformVersionDefault = "0.0.0"
+	userAgentArchitectureX86        = "x86"
+	userAgentBitness64              = "64"
+	userAgentWow64Token             = "wow64"
+	versionDelimiterSpaceRune       = ' '
+	versionDelimiterSemicolonRune   = ';'
+	versionDelimiterParenRune       = ')'
+
+	chromeBrandNotABrandName    = "Not A(Brand"
+	chromeBrandNotABrandVersion = "8"
+	chromeBrandChromiumName     = "Chromium"
+	chromeBrandGoogleChromeName = "Google Chrome"
 )
+
+var stealthScripts = []string{
+	navigatorWebdriverOverrideScript,
+	windowChromeRuntimeDefinitionScript,
+	navigatorLanguagesOverrideScript,
+	navigatorPluginsOverrideScript,
+	navigatorPermissionsOverrideScript,
+}
 
 // Config controls resolver behavior. Suitable for CLI & Web usage.
 type Config struct {
@@ -145,8 +195,9 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeSilentFlagKey, true),
 		chromedp.Flag(chromeDisableLoggingFlagKey, true),
 		chromedp.Flag(chromeIgnoreCertificateErrorsFlag, true),
-		chromedp.Flag(chromeRemoteAllowOriginsFlagKey, chromeRemoteAllowOriginsValue),
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
+		chromedp.Flag(chromeEnableAutomationFlagKey, false),
+		chromedp.Flag(chromeDisableBlinkFeaturesFlagKey, chromeAutomationControlledBlinkValue),
 	)
 
 	if proxyValue := chromeProxyServerValue(trimmedURL); proxyValue != "" {
@@ -209,13 +260,14 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 
 	var htmlContent string
 	renderTasks := chromedp.Tasks{
-		chromedp.ActionFunc(func(chromedpCtx context.Context) error {
-			return network.Enable().Do(chromedpCtx)
-		}),
+		chromedp.ActionFunc(enableNetworkAndSetHeaders),
+		chromedp.ActionFunc(disableAutomationDetection),
+		chromedp.ActionFunc(applyStealthScripts),
 	}
 	if trimmedUserAgent != "" {
+		userAgentValue := trimmedUserAgent
 		renderTasks = append(renderTasks, chromedp.ActionFunc(func(chromedpCtx context.Context) error {
-			return emulation.SetUserAgentOverride(trimmedUserAgent).Do(chromedpCtx)
+			return applyUserAgentOverride(chromedpCtx, userAgentValue)
 		}))
 	}
 	if chromeLogPrinter != nil {
@@ -540,6 +592,208 @@ func firstGroup(m []string) string {
 		return m[1]
 	}
 	return ""
+}
+
+func enableNetworkAndSetHeaders(chromedpCtx context.Context) error {
+	if err := network.Enable().Do(chromedpCtx); err != nil {
+		return err
+	}
+	headers := network.Headers{
+		acceptLanguageHeaderName:          acceptLanguageHeaderValue,
+		upgradeInsecureRequestsHeaderName: upgradeInsecureRequestsHeaderValue,
+	}
+	return network.SetExtraHTTPHeaders(headers).Do(chromedpCtx)
+}
+
+func disableAutomationDetection(chromedpCtx context.Context) error {
+	return emulation.SetAutomationOverride(false).Do(chromedpCtx)
+}
+
+func applyStealthScripts(chromedpCtx context.Context) error {
+	for _, script := range stealthScripts {
+		if _, err := page.AddScriptToEvaluateOnNewDocument(script).Do(chromedpCtx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applyUserAgentOverride(chromedpCtx context.Context, userAgent string) error {
+	userAgentOverride := emulation.SetUserAgentOverride(userAgent).WithAcceptLanguage(acceptLanguageHeaderValue)
+	navigatorPlatform := navigatorPlatformForUserAgent(userAgent)
+	if navigatorPlatform != "" {
+		userAgentOverride = userAgentOverride.WithPlatform(navigatorPlatform)
+	}
+	if metadata := userAgentMetadataFromUserAgent(userAgent); metadata != nil {
+		userAgentOverride = userAgentOverride.WithUserAgentMetadata(metadata)
+	}
+	return userAgentOverride.Do(chromedpCtx)
+}
+
+func navigatorPlatformForUserAgent(userAgent string) string {
+	normalized := strings.ToLower(userAgent)
+	switch {
+	case strings.Contains(normalized, userAgentMacintoshToken):
+		return navigatorPlatformMacValue
+	case strings.Contains(normalized, userAgentWindowsToken):
+		return navigatorPlatformWindowsValue
+	case strings.Contains(normalized, userAgentLinuxToken):
+		return navigatorPlatformLinuxValue
+	default:
+		return navigatorPlatformMacValue
+	}
+}
+
+func userAgentMetadataFromUserAgent(userAgent string) *emulation.UserAgentMetadata {
+	majorVersion, fullVersion := extractChromeVersions(userAgent)
+	if majorVersion == "" || fullVersion == "" {
+		return nil
+	}
+	platformDetails := platformDetailsFromUserAgent(userAgent)
+	brandVersions := majorBrandVersions(majorVersion)
+	fullVersionList := fullVersionBrandList(fullVersion)
+	return &emulation.UserAgentMetadata{
+		Brands:          brandVersions,
+		FullVersionList: fullVersionList,
+		Platform:        platformDetails.platform,
+		PlatformVersion: platformDetails.platformVersion,
+		Architecture:    platformDetails.architecture,
+		Model:           platformDetails.model,
+		Mobile:          false,
+		Bitness:         platformDetails.bitness,
+		Wow64:           platformDetails.wow64,
+	}
+}
+
+type userAgentPlatformDetails struct {
+	platform        string
+	platformVersion string
+	architecture    string
+	bitness         string
+	model           string
+	wow64           bool
+}
+
+func platformDetailsFromUserAgent(userAgent string) userAgentPlatformDetails {
+	normalized := strings.ToLower(userAgent)
+	details := userAgentPlatformDetails{
+		platform:        userAgentPlatformMacOS,
+		platformVersion: userAgentPlatformVersionDefault,
+		architecture:    userAgentArchitectureX86,
+		bitness:         userAgentBitness64,
+		model:           "",
+		wow64:           false,
+	}
+	switch {
+	case strings.Contains(normalized, userAgentMacintoshToken):
+		details.platform = userAgentPlatformMacOS
+		details.platformVersion = macPlatformVersion(userAgent)
+	case strings.Contains(normalized, userAgentWindowsToken):
+		details.platform = userAgentPlatformWindows
+		details.platformVersion = windowsPlatformVersion(userAgent)
+		details.wow64 = strings.Contains(normalized, userAgentWow64Token)
+	case strings.Contains(normalized, userAgentLinuxToken):
+		details.platform = userAgentPlatformLinux
+		details.platformVersion = userAgentPlatformVersionDefault
+	default:
+		details.platform = userAgentPlatformMacOS
+		details.platformVersion = userAgentPlatformVersionDefault
+	}
+	return details
+}
+
+func extractChromeVersions(userAgent string) (string, string) {
+	markerIndex := strings.Index(userAgent, userAgentChromeMarker)
+	if markerIndex < 0 {
+		return "", ""
+	}
+	versionSection := userAgent[markerIndex+len(userAgentChromeMarker):]
+	delimiterIndex := indexOfVersionDelimiter(versionSection)
+	versionValue := strings.TrimSpace(versionSection[:delimiterIndex])
+	if versionValue == "" {
+		return "", ""
+	}
+	majorVersion := versionValue
+	if dotIndex := strings.Index(versionValue, "."); dotIndex >= 0 {
+		majorVersion = versionValue[:dotIndex]
+	}
+	return majorVersion, versionValue
+}
+
+func macPlatformVersion(userAgent string) string {
+	rawVersion := parseVersionAfterToken(userAgent, userAgentMacVersionToken)
+	if rawVersion == "" {
+		return userAgentPlatformVersionDefault
+	}
+	normalizedVersion := strings.ReplaceAll(rawVersion, userAgentTokenUnderscore, ".")
+	return canonicalizeVersion(normalizedVersion)
+}
+
+func windowsPlatformVersion(userAgent string) string {
+	rawVersion := parseVersionAfterToken(userAgent, userAgentWindowsVersionToken)
+	if rawVersion == "" {
+		return userAgentPlatformVersionDefault
+	}
+	return canonicalizeVersion(rawVersion)
+}
+
+func parseVersionAfterToken(userAgent string, token string) string {
+	startIndex := strings.Index(userAgent, token)
+	if startIndex < 0 {
+		return ""
+	}
+	versionSection := userAgent[startIndex+len(token):]
+	delimiterIndex := indexOfVersionDelimiter(versionSection)
+	versionCandidate := strings.TrimSpace(versionSection[:delimiterIndex])
+	return versionCandidate
+}
+
+func indexOfVersionDelimiter(versionSection string) int {
+	for index, charValue := range versionSection {
+		if charValue == versionDelimiterSpaceRune || charValue == versionDelimiterSemicolonRune || charValue == versionDelimiterParenRune {
+			return index
+		}
+	}
+	return len(versionSection)
+}
+
+func canonicalizeVersion(version string) string {
+	if version == "" {
+		return userAgentPlatformVersionDefault
+	}
+	components := strings.Split(version, ".")
+	for len(components) < 3 {
+		components = append(components, "0")
+	}
+	if len(components) > 3 {
+		components = components[:3]
+	}
+	return strings.Join(components, ".")
+}
+
+func majorBrandVersions(majorVersion string) []*emulation.UserAgentBrandVersion {
+	if majorVersion == "" {
+		return nil
+	}
+	return []*emulation.UserAgentBrandVersion{
+		buildBrandVersion(chromeBrandNotABrandName, chromeBrandNotABrandVersion),
+		buildBrandVersion(chromeBrandChromiumName, majorVersion),
+		buildBrandVersion(chromeBrandGoogleChromeName, majorVersion),
+	}
+}
+
+func fullVersionBrandList(fullVersion string) []*emulation.UserAgentBrandVersion {
+	if fullVersion == "" {
+		return nil
+	}
+	return []*emulation.UserAgentBrandVersion{
+		buildBrandVersion(chromeBrandChromiumName, fullVersion),
+		buildBrandVersion(chromeBrandGoogleChromeName, fullVersion),
+	}
+}
+
+func buildBrandVersion(brand string, version string) *emulation.UserAgentBrandVersion {
+	return &emulation.UserAgentBrandVersion{Brand: brand, Version: version}
 }
 
 func chromeProxyServerValue(targetURL string) string {

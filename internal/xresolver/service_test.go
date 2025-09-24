@@ -360,3 +360,98 @@ func TestChromeProxyServerValueUsesProxyWhenNotBypassed(t *testing.T) {
 		t.Fatalf("expected proxy %q, got %q", proxyAddress, proxy)
 	}
 }
+
+func TestNavigatorPlatformForUserAgent(t *testing.T) {
+	testCases := []struct {
+		name           string
+		userAgentValue string
+		expected       string
+	}{
+		{
+			name:           "mac platform",
+			userAgentValue: DefaultUAs[0],
+			expected:       navigatorPlatformMacValue,
+		},
+		{
+			name:           "windows platform",
+			userAgentValue: DefaultUAs[1],
+			expected:       navigatorPlatformWindowsValue,
+		},
+		{
+			name:           "linux platform",
+			userAgentValue: DefaultUAs[2],
+			expected:       navigatorPlatformLinuxValue,
+		},
+		{
+			name:           "fallback platform",
+			userAgentValue: "Unknown",
+			expected:       navigatorPlatformMacValue,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := navigatorPlatformForUserAgent(testCase.userAgentValue)
+			if actual != testCase.expected {
+				t.Fatalf("expected platform %q, got %q", testCase.expected, actual)
+			}
+		})
+	}
+}
+
+func TestUserAgentMetadataFromUserAgent(t *testing.T) {
+	testCases := []struct {
+		name                    string
+		userAgentValue          string
+		expectedPlatform        string
+		expectedPlatformVersion string
+	}{
+		{
+			name:                    "mac metadata",
+			userAgentValue:          DefaultUAs[0],
+			expectedPlatform:        userAgentPlatformMacOS,
+			expectedPlatformVersion: "14.5.0",
+		},
+		{
+			name:                    "windows metadata",
+			userAgentValue:          DefaultUAs[1],
+			expectedPlatform:        userAgentPlatformWindows,
+			expectedPlatformVersion: "10.0.0",
+		},
+		{
+			name:                    "linux metadata",
+			userAgentValue:          DefaultUAs[2],
+			expectedPlatform:        userAgentPlatformLinux,
+			expectedPlatformVersion: userAgentPlatformVersionDefault,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			metadata := userAgentMetadataFromUserAgent(testCase.userAgentValue)
+			if metadata == nil {
+				t.Fatalf("expected metadata for %s", testCase.name)
+			}
+			if metadata.Platform != testCase.expectedPlatform {
+				t.Fatalf("expected platform %q, got %q", testCase.expectedPlatform, metadata.Platform)
+			}
+			if metadata.PlatformVersion != testCase.expectedPlatformVersion {
+				t.Fatalf("expected platform version %q, got %q", testCase.expectedPlatformVersion, metadata.PlatformVersion)
+			}
+			if metadata.Architecture != userAgentArchitectureX86 {
+				t.Fatalf("expected architecture %q, got %q", userAgentArchitectureX86, metadata.Architecture)
+			}
+			if metadata.Bitness != userAgentBitness64 {
+				t.Fatalf("expected bitness %q, got %q", userAgentBitness64, metadata.Bitness)
+			}
+			if len(metadata.Brands) != 3 {
+				t.Fatalf("expected 3 brand entries, got %d", len(metadata.Brands))
+			}
+			if len(metadata.FullVersionList) != 2 {
+				t.Fatalf("expected 2 full version entries, got %d", len(metadata.FullVersionList))
+			}
+		})
+	}
+}
