@@ -70,6 +70,7 @@ func TestXResolverChromeIntegration(t *testing.T) {
 		RetryMin:            xresolverIntegrationRetryMin,
 		RetryMax:            xresolverIntegrationRetryMax,
 	}
+	resolverConfig.Logf = t.Logf
 	resolverService := xresolver.NewService(resolverConfig, xresolver.NewChromeRenderer())
 
 	scenarios := []xresolverIntegrationScenario{

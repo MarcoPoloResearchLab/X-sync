@@ -10,6 +10,7 @@ import (
 
 	"github.com/f-sync/fsync/internal/handles"
 	"github.com/f-sync/fsync/internal/matrix"
+	"github.com/f-sync/fsync/internal/xresolver"
 )
 
 const (
@@ -20,7 +21,7 @@ const (
 
 // Config configures a Service instance.
 type Config struct {
-	Handles        handles.Config
+	XResolver      xresolver.Config
 	AccountTimeout time.Duration
 	RequestPacing  RequestPacingConfig
 	IntentBaseURL  string
@@ -69,11 +70,12 @@ var _ matrix.AccountHandleResolver = (*Service)(nil)
 func NewService(configuration Config) (*Service, error) {
 	resolver := configuration.Resolver
 	if resolver == nil {
-		handlesResolver, resolverErr := handles.NewResolver(configuration.Handles)
+		xresolverService := xresolver.NewService(configuration.XResolver, xresolver.NewChromeRenderer())
+		adapter, resolverErr := NewAccountResolverFromXResolver(xresolverService)
 		if resolverErr != nil {
 			return nil, fmt.Errorf("%s: %w", errMessageCreateResolver, resolverErr)
 		}
-		resolver = handlesResolver
+		resolver = adapter
 	}
 
 	service := &Service{

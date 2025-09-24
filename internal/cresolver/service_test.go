@@ -3,11 +3,13 @@ package cresolver_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/f-sync/fsync/internal/cresolver"
 	"github.com/f-sync/fsync/internal/handles"
+	"github.com/f-sync/fsync/internal/xresolver"
 )
 
 type accountResolverStub struct {
@@ -16,6 +18,32 @@ type accountResolverStub struct {
 	callObserver func(callIndex int, accountID string, accountCtx context.Context)
 
 	callCount int
+}
+
+const (
+	stubRendererMissingURLFormat    = "renderer missing response for url %s"
+	stubRendererProfileHTMLTemplate = `<html><head><meta property="og:title" content="%s (@%s) / X"></head><body><a href="https://x.com/%s">@%s</a></body></html>`
+	stubRendererHandleMissingHTML   = `<html><body>handle unavailable</body></html>`
+	expectedNilServiceErrorMessage  = "xresolver service is nil"
+	expectedNoHandleErrorMessage    = "no handle found"
+)
+
+type stubXResolverRenderer struct {
+	htmlByURL map[string]string
+}
+
+func (renderer stubXResolverRenderer) Render(ctx context.Context, userAgent string, url string, vtBudgetMS int, chromePath string) (string, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", ctxErr
+	}
+	if htmlDocument, exists := renderer.htmlByURL[url]; exists {
+		return htmlDocument, nil
+	}
+	return "", fmt.Errorf(stubRendererMissingURLFormat, url)
+}
+
+func stubProfileHTML(handle string, displayName string) string {
+	return fmt.Sprintf(stubRendererProfileHTMLTemplate, displayName, handle, handle, handle)
 }
 
 func (stub *accountResolverStub) ResolveAccount(ctx context.Context, accountID string) (handles.AccountRecord, error) {
@@ -299,6 +327,104 @@ func TestServiceResolveMany(t *testing.T) {
 			second := results[accountIDMoonOfAMoon]
 			if !errors.Is(second.Err, context.Canceled) {
 				t.Fatalf("expected cancellation error for second account, received %v", second.Err)
+			}
+		})
+	}
+}
+
+func TestNewAccountResolverFromXResolver(t *testing.T) {
+	t.Parallel()
+
+	_, err := cresolver.NewAccountResolverFromXResolver(nil)
+	if err == nil {
+		t.Fatal("expected error for nil xresolver service")
+	}
+	if err.Error() != expectedNilServiceErrorMessage {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	renderer := stubXResolverRenderer{
+		htmlByURL: map[string]string{
+			resolverTestUtils.IntentURL(accountIDJamesMarsh):  stubProfileHTML(userNameJamesMarsh, displayNameJamesMarsh),
+			resolverTestUtils.ProfileURL(accountIDJamesMarsh): stubProfileHTML(userNameJamesMarsh, displayNameJamesMarsh),
+		},
+	}
+	service := xresolver.NewService(xresolver.Config{}, renderer)
+	resolver, createErr := cresolver.NewAccountResolverFromXResolver(service)
+	if createErr != nil {
+		t.Fatalf("unexpected adapter creation error: %v", createErr)
+	}
+	if resolver == nil {
+		t.Fatal("expected resolver to be non-nil")
+	}
+}
+
+func TestXResolverAccountAdapterResolveAccount(t *testing.T) {
+	t.Parallel()
+
+	type xresolverTestCase struct {
+		name           string
+		accountID      string
+		renderer       stubXResolverRenderer
+		expectedRecord handles.AccountRecord
+		expectedErr    string
+	}
+
+	testCases := []xresolverTestCase{
+		{
+			name:      "resolves handle and display name",
+			accountID: accountIDJamesMarsh,
+			renderer: stubXResolverRenderer{htmlByURL: map[string]string{
+				resolverTestUtils.IntentURL(accountIDJamesMarsh):  stubProfileHTML(userNameJamesMarsh, displayNameJamesMarsh),
+				resolverTestUtils.ProfileURL(accountIDJamesMarsh): stubProfileHTML(userNameJamesMarsh, displayNameJamesMarsh),
+			}},
+			expectedRecord: resolverTestUtils.AccountRecord(accountIDJamesMarsh, userNameJamesMarsh, displayNameJamesMarsh),
+		},
+		{
+			name:      "propagates xresolver errors",
+			accountID: accountIDUnknown,
+			renderer: stubXResolverRenderer{htmlByURL: map[string]string{
+				resolverTestUtils.IntentURL(accountIDUnknown):  stubRendererHandleMissingHTML,
+				resolverTestUtils.ProfileURL(accountIDUnknown): stubRendererHandleMissingHTML,
+			}},
+			expectedRecord: resolverTestUtils.MinimalAccountRecord(accountIDUnknown),
+			expectedErr:    expectedNoHandleErrorMessage,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := xresolver.NewService(xresolver.Config{}, testCase.renderer)
+			resolver, createErr := cresolver.NewAccountResolverFromXResolver(service)
+			if createErr != nil {
+				t.Fatalf("create adapter: %v", createErr)
+			}
+
+			resolvedRecord, resolveErr := resolver.ResolveAccount(context.Background(), testCase.accountID)
+			if resolvedRecord.AccountID != testCase.expectedRecord.AccountID {
+				t.Fatalf("expected account id %s, received %s", testCase.expectedRecord.AccountID, resolvedRecord.AccountID)
+			}
+			if resolvedRecord.UserName != testCase.expectedRecord.UserName {
+				t.Fatalf("expected user name %s, received %s", testCase.expectedRecord.UserName, resolvedRecord.UserName)
+			}
+			if resolvedRecord.DisplayName != testCase.expectedRecord.DisplayName {
+				t.Fatalf("expected display name %s, received %s", testCase.expectedRecord.DisplayName, resolvedRecord.DisplayName)
+			}
+
+			if testCase.expectedErr == "" {
+				if resolveErr != nil {
+					t.Fatalf("expected no error, received %v", resolveErr)
+				}
+			} else {
+				if resolveErr == nil {
+					t.Fatalf("expected error %q, received nil", testCase.expectedErr)
+				}
+				if resolveErr.Error() != testCase.expectedErr {
+					t.Fatalf("expected error %q, received %v", testCase.expectedErr, resolveErr)
+				}
 			}
 		})
 	}
