@@ -27,6 +27,7 @@ const (
 	emptyAccountIdentifier      = ""
 
 	userIntentURLFormat          = "https://x.com/intent/user?user_id=%s"
+	userProfileURLFormat         = "https://x.com/i/user/%s"
 	resolverErrorProfileNotFound = "profile not found"
 )
 
@@ -40,6 +41,10 @@ type resolverTestUtilities struct{}
 
 func (resolverTestUtilities) IntentURL(accountID string) string {
 	return fmt.Sprintf(userIntentURLFormat, accountID)
+}
+
+func (resolverTestUtilities) ProfileURL(accountID string) string {
+	return fmt.Sprintf(userProfileURLFormat, accountID)
 }
 
 func (resolverTestUtilities) AccountRecord(accountID string, userName string, displayName string) handles.AccountRecord {
