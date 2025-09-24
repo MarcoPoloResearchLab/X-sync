@@ -40,8 +40,6 @@ const (
 	chromeIgnoreCertificateErrorsFlag  = "ignore-certificate-errors"
 	chromeUserAgentFlagKey             = "user-agent"
 	chromeVirtualTimeBudgetFlagKey     = "virtual-time-budget"
-	chromeRemoteAllowOriginsFlagKey    = "remote-allow-origins"
-	chromeRemoteAllowOriginsValue      = "*"
 	chromeProxyServerFlagKey           = "proxy-server"
 	httpsProxyEnvironmentUpper         = "HTTPS_PROXY"
 	httpsProxyEnvironmentLower         = "https_proxy"
@@ -143,7 +141,6 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeSilentFlagKey, true),
 		chromedp.Flag(chromeDisableLoggingFlagKey, true),
 		chromedp.Flag(chromeIgnoreCertificateErrorsFlag, true),
-		chromedp.Flag(chromeRemoteAllowOriginsFlagKey, chromeRemoteAllowOriginsValue),
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
 	)
 
