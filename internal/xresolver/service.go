@@ -34,6 +34,8 @@ const (
 	chromeDisableLoggingFlagKey        = "disable-logging"
 	chromeUserAgentFlagKey             = "user-agent"
 	chromeVirtualTimeBudgetFlagKey     = "virtual-time-budget"
+	chromeRemoteAllowOriginsFlagKey    = "remote-allow-origins"
+	chromeRemoteAllowOriginsValue      = "*"
 	chromeSilentLogLevelValue          = "3"
 	chromeRendererEmptyURLErrorMessage = "empty url"
 
@@ -118,6 +120,7 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeLogLevelFlagKey, chromeSilentLogLevelValue),
 		chromedp.Flag(chromeSilentFlagKey, true),
 		chromedp.Flag(chromeDisableLoggingFlagKey, true),
+		chromedp.Flag(chromeRemoteAllowOriginsFlagKey, chromeRemoteAllowOriginsValue),
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
 	)
 
