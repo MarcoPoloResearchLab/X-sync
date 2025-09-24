@@ -24,6 +24,7 @@ const (
 	defaultVirtualTimeBudgetMilliseconds = 15000
 
 	chromeHeadlessFlagKey                             = "headless"
+	chromeHeadlessModeNewValue                        = "new"
 	chromeDisableGPUFlagKey                           = "disable-gpu"
 	chromeDisableGPUStartupFlagKey                    = "disable-gpu-startup"
 	chromeDisableDevShmUsageFlagKey                   = "disable-dev-shm-usage"
