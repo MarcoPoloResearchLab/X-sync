@@ -4,6 +4,7 @@ package xresolver
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -278,5 +279,84 @@ func TestChromeProxyServerValue(t *testing.T) {
 				t.Fatalf("expected proxy %q, got %q", testCase.expectedProxy, actualProxy)
 			}
 		})
+	}
+}
+
+func TestBypassProxyRespectsPatterns(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name           string
+		targetURL      string
+		noProxyEntries string
+		expectBypass   bool
+	}{
+		{
+			name:           "exact match",
+			targetURL:      "https://api.internal.local/resource",
+			noProxyEntries: "api.internal.local",
+			expectBypass:   true,
+		},
+		{
+			name:           "leading dot",
+			targetURL:      "https://profile.x.com",
+			noProxyEntries: ".x.com",
+			expectBypass:   true,
+		},
+		{
+			name:           "wildcard prefix",
+			targetURL:      "https://subdomain.x.com",
+			noProxyEntries: "*.x.com",
+			expectBypass:   true,
+		},
+		{
+			name:           "port specific mismatch",
+			targetURL:      "https://x.com",
+			noProxyEntries: "x.com:8080",
+			expectBypass:   false,
+		},
+		{
+			name:           "asterisk all",
+			targetURL:      "https://anything.example",
+			noProxyEntries: "*",
+			expectBypass:   true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			parsedURL, parseErr := url.Parse(testCase.targetURL)
+			if parseErr != nil {
+				t.Fatalf("parse url: %v", parseErr)
+			}
+			bypass := bypassProxy(parsedURL, testCase.noProxyEntries)
+			if bypass != testCase.expectBypass {
+				t.Fatalf("expected bypass=%t for %s with %q, got %t", testCase.expectBypass, testCase.targetURL, testCase.noProxyEntries, bypass)
+			}
+		})
+	}
+}
+
+func TestChromeProxyServerValueHonorsNoProxyWildcard(t *testing.T) {
+	proxyAddress := "http://localhost:8080"
+	t.Setenv(httpsProxyEnvironmentUpper, proxyAddress)
+	t.Setenv(noProxyEnvironmentUpper, "*.x.com")
+
+	if proxy := chromeProxyServerValue("https://x.com/intent/user?user_id=1"); proxy != "" {
+		t.Fatalf("expected proxy to be empty due to NO_PROXY wildcard, got %q", proxy)
+	}
+}
+
+func TestChromeProxyServerValueUsesProxyWhenNotBypassed(t *testing.T) {
+	proxyAddress := "http://localhost:8080"
+	t.Setenv(httpsProxyEnvironmentUpper, proxyAddress)
+	t.Setenv(noProxyEnvironmentUpper, "internal.local")
+
+	proxy := chromeProxyServerValue("https://x.com/intent/user?user_id=1")
+	if proxy != proxyAddress {
+		t.Fatalf("expected proxy %q, got %q", proxyAddress, proxy)
 	}
 }

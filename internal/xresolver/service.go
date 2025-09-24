@@ -10,10 +10,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
 
@@ -35,6 +37,7 @@ const (
 	chromeLogLevelFlagKey              = "log-level"
 	chromeSilentFlagKey                = "silent"
 	chromeDisableLoggingFlagKey        = "disable-logging"
+	chromeIgnoreCertificateErrorsFlag  = "ignore-certificate-errors"
 	chromeUserAgentFlagKey             = "user-agent"
 	chromeVirtualTimeBudgetFlagKey     = "virtual-time-budget"
 	chromeRemoteAllowOriginsFlagKey    = "remote-allow-origins"
@@ -50,6 +53,13 @@ const (
 	noProxyEnvironmentLower            = "no_proxy"
 	chromeSilentLogLevelValue          = "3"
 	chromeRendererEmptyURLErrorMessage = "empty url"
+	chromeLogNavigationStartMessage    = "chromedp navigate: user-agent=%q url=%s"
+	chromeLogNavigationSuccessMessage  = "chromedp render success: url=%s bytes=%d"
+	chromeLogNavigationErrorMessage    = "chromedp render failure: url=%s err=%v"
+	chromeLogNetworkRequestMessage     = "chromedp network request: url=%s"
+	chromeLogNetworkResponseMessage    = "chromedp network response: url=%s status=%d"
+	chromeLogNetworkFailureMessage     = "chromedp network failure: url=%s error=%s canceled=%v"
+	chromeLogTargetCrashMessage        = "chromedp target crashed"
 
 	documentBodyCSSSelector       = "body"
 	documentHTMLNodeQuerySelector = "html"
@@ -132,6 +142,7 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 		chromedp.Flag(chromeLogLevelFlagKey, chromeSilentLogLevelValue),
 		chromedp.Flag(chromeSilentFlagKey, true),
 		chromedp.Flag(chromeDisableLoggingFlagKey, true),
+		chromedp.Flag(chromeIgnoreCertificateErrorsFlag, true),
 		chromedp.Flag(chromeRemoteAllowOriginsFlagKey, chromeRemoteAllowOriginsValue),
 		chromedp.Flag(chromeVirtualTimeBudgetFlagKey, strconv.Itoa(effectiveBudget)),
 	)
@@ -152,8 +163,47 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 	allocatorCtx, cancelAllocator := chromedp.NewExecAllocator(ctx, allocatorOptions...)
 	defer cancelAllocator()
 
-	chromeCtx, cancelChrome := chromedp.NewContext(allocatorCtx)
+	chromeLogPrinter := logFunctionFromContext(ctx)
+	contextOptions := []chromedp.ContextOption{}
+	if chromeLogPrinter != nil {
+		contextOptions = append(contextOptions,
+			chromedp.WithLogf(chromeLogPrinter),
+			chromedp.WithErrorf(chromeLogPrinter),
+			chromedp.WithDebugf(chromeLogPrinter),
+		)
+	}
+
+	chromeCtx, cancelChrome := chromedp.NewContext(allocatorCtx, contextOptions...)
 	defer cancelChrome()
+
+	if chromeLogPrinter != nil {
+		requestURLByID := map[network.RequestID]string{}
+		var requestMapMutex sync.Mutex
+		chromedp.ListenTarget(chromeCtx, func(event any) {
+			switch typedEvent := event.(type) {
+			case *network.EventRequestWillBeSent:
+				requestMapMutex.Lock()
+				requestURLByID[typedEvent.RequestID] = typedEvent.Request.URL
+				requestMapMutex.Unlock()
+				chromeLogPrinter(chromeLogNetworkRequestMessage, typedEvent.Request.URL)
+			case *network.EventResponseReceived:
+				requestMapMutex.Lock()
+				requestURL := requestURLByID[typedEvent.RequestID]
+				if requestURL == "" {
+					requestURL = typedEvent.Response.URL
+				}
+				requestMapMutex.Unlock()
+				chromeLogPrinter(chromeLogNetworkResponseMessage, requestURL, int(typedEvent.Response.Status))
+			case *network.EventLoadingFailed:
+				requestMapMutex.Lock()
+				requestURL := requestURLByID[typedEvent.RequestID]
+				requestMapMutex.Unlock()
+				chromeLogPrinter(chromeLogNetworkFailureMessage, requestURL, typedEvent.ErrorText, typedEvent.Canceled)
+			case *target.EventTargetCrashed:
+				chromeLogPrinter(chromeLogTargetCrashMessage)
+			}
+		})
+	}
 
 	var htmlContent string
 	renderTasks := chromedp.Tasks{
@@ -166,6 +216,9 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 			return emulation.SetUserAgentOverride(trimmedUserAgent).Do(chromedpCtx)
 		}))
 	}
+	if chromeLogPrinter != nil {
+		chromeLogPrinter(chromeLogNavigationStartMessage, trimmedUserAgent, trimmedURL)
+	}
 	renderTasks = append(renderTasks,
 		chromedp.Navigate(trimmedURL),
 		chromedp.WaitReady(documentBodyCSSSelector, chromedp.ByQuery),
@@ -173,7 +226,13 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 	)
 
 	if err := chromedp.Run(chromeCtx, renderTasks...); err != nil {
+		if chromeLogPrinter != nil {
+			chromeLogPrinter(chromeLogNavigationErrorMessage, trimmedURL, err)
+		}
 		return "", err
+	}
+	if chromeLogPrinter != nil {
+		chromeLogPrinter(chromeLogNavigationSuccessMessage, trimmedURL, len(htmlContent))
 	}
 	return htmlContent, nil
 }
@@ -279,8 +338,12 @@ func (s *Service) resolveWithRetries(ctx context.Context, id string) Profile {
 			if s.cfg.AttemptTimeout > 0 {
 				attemptCtx, cancel = context.WithTimeout(ctx, s.cfg.AttemptTimeout)
 			}
+			renderCtx := attemptCtx
+			if s.cfg.Logf != nil {
+				renderCtx = withLogFunction(attemptCtx, s.cfg.Logf)
+			}
 			started := time.Now()
-			htmlDoc, err := s.renderer.Render(attemptCtx, ua, url, s.cfg.VirtualTimeBudgetMS, s.cfg.ChromePath)
+			htmlDoc, err := s.renderer.Render(renderCtx, ua, url, s.cfg.VirtualTimeBudgetMS, s.cfg.ChromePath)
 			if cancel != nil {
 				cancel()
 			}
@@ -546,7 +609,7 @@ func bypassProxy(targetURL *neturl.URL, noProxyList string) bool {
 			}
 		}
 
-		normalizedEntryHost := strings.ToLower(strings.TrimPrefix(entryHost, "."))
+		normalizedEntryHost := strings.ToLower(strings.TrimPrefix(strings.TrimPrefix(entryHost, "*"), "."))
 		if normalizedEntryHost == "" {
 			continue
 		}
