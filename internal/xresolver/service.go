@@ -71,8 +71,11 @@ const (
 	upgradeInsecureRequestsHeaderName  = "Upgrade-Insecure-Requests"
 	upgradeInsecureRequestsHeaderValue = "1"
 
-	documentBodyCSSSelector       = "body"
-	documentHTMLNodeQuerySelector = "html"
+	documentReadyStateScript             = "document.readyState"
+	documentReadyStateCompleteValue      = "complete"
+	documentReadyStatePollInterval       = 100 * time.Millisecond
+	documentOuterHTMLScript              = "document.documentElement.outerHTML"
+	documentOuterHTMLNilDestinationError = "html destination pointer is nil"
 
 	navigatorPlatformMacValue     = "MacIntel"
 	navigatorPlatformWindowsValue = "Win32"
@@ -181,7 +184,7 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 	trimmedUserAgent := strings.TrimSpace(userAgent)
 	allocatorOptions := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	allocatorOptions = append(allocatorOptions,
-		chromedp.Flag(chromeHeadlessFlagKey, chromeHeadlessModeNewValue),
+		chromedp.Flag(chromeHeadlessFlagKey, true),
 		chromedp.Flag(chromeDisableGPUFlagKey, true),
 		chromedp.Flag(chromeDisableGPUStartupFlagKey, true),
 		chromedp.Flag(chromeDisableDevShmUsageFlagKey, true),
@@ -279,8 +282,10 @@ func (renderer *ChromeRenderer) Render(ctx context.Context, userAgent, url strin
 	}
 	renderTasks = append(renderTasks,
 		chromedp.Navigate(trimmedURL),
-		chromedp.WaitReady(documentBodyCSSSelector, chromedp.ByQuery),
-		chromedp.OuterHTML(documentHTMLNodeQuerySelector, &htmlContent, chromedp.ByQuery),
+		chromedp.ActionFunc(waitForDocumentReadyStateComplete),
+		chromedp.ActionFunc(func(chromedpCtx context.Context) error {
+			return readDocumentOuterHTML(chromedpCtx, &htmlContent)
+		}),
 	)
 
 	if err := chromedp.Run(chromeCtx, renderTasks...); err != nil {
@@ -632,6 +637,47 @@ func applyUserAgentOverride(chromedpCtx context.Context, userAgent string) error
 		userAgentOverride = userAgentOverride.WithUserAgentMetadata(metadata)
 	}
 	return userAgentOverride.Do(chromedpCtx)
+}
+
+func waitForDocumentReadyStateComplete(chromedpCtx context.Context) error {
+	ticker := time.NewTicker(documentReadyStatePollInterval)
+	defer ticker.Stop()
+
+	var lastEvaluationError error
+	for {
+		var readyStateValue string
+		evaluationErr := chromedp.Evaluate(documentReadyStateScript, &readyStateValue, chromedp.EvalAsValue).Do(chromedpCtx)
+		if evaluationErr == nil {
+			lastEvaluationError = nil
+			if strings.EqualFold(strings.TrimSpace(readyStateValue), documentReadyStateCompleteValue) {
+				return nil
+			}
+		} else {
+			lastEvaluationError = evaluationErr
+		}
+
+		select {
+		case <-chromedpCtx.Done():
+			if lastEvaluationError != nil {
+				return lastEvaluationError
+			}
+			return chromedpCtx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func readDocumentOuterHTML(chromedpCtx context.Context, htmlContentDestination *string) error {
+	if htmlContentDestination == nil {
+		return fmt.Errorf(documentOuterHTMLNilDestinationError)
+	}
+
+	var documentOuterHTML string
+	if err := chromedp.Evaluate(documentOuterHTMLScript, &documentOuterHTML, chromedp.EvalAsValue).Do(chromedpCtx); err != nil {
+		return err
+	}
+	*htmlContentDestination = documentOuterHTML
+	return nil
 }
 
 func navigatorPlatformForUserAgent(userAgent string) string {
